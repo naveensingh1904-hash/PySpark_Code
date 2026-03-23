@@ -1,0 +1,52 @@
+
+
+# 1 Initialize Spark session
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import *
+spark = SparkSession.builder.appName('Spark Playground').getOrCreate()
+
+# -----------------------------------------
+#  2 Load the files (adjust the file paths)
+# -----------------------------------------
+
+# Example: If your files are uploaded as CSVs
+
+
+sales_df = spark.read.format("csv").options(**{"inferSchema": True,
+                                        "header": True}).load("/samples/sales.csv")
+customer_df = spark.read.format("csv").options(**{"inferSchema": True,
+                                        "header": True}).load("/samples/customers.csv")
+product_df = spark.read.format("csv").options(**{"inferSchema": True,
+                                        "header": True}).load("/samples/products.csv")
+
+#3 Register as SQL views
+sales_df.createOrReplaceTempView("sales")
+customer_df.createOrReplaceTempView("customers")
+product_df.createOrReplaceTempView("products")
+
+# 4. Filter customers with purchase_amount > 100
+# -----------------------------------------
+#df_filtered = customer_df.filter(customer_df.purchase_amount > 100)
+
+df_filtered = spark.sql("""
+               SELECT 
+        s.sale_id,
+        s.customer_id,
+        c.first_name,
+        s.product_id,
+        p.product_name,
+        p.category,
+        s.quantity,
+        s.total_amount,
+        (s.quantity * s.total_amount) as Total_Purchase,
+        s.sale_date
+    FROM sales s
+    LEFT JOIN customers c ON s.customer_id = c.customer_id
+    LEFT JOIN products p ON s.product_id = p.product_id
+""")
+
+# -----------------------------------------
+#5 Display the DataFrames
+# -----------------------------------------
+
+display(df_filtered)
