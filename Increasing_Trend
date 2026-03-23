@@ -1,0 +1,93 @@
+
+
+# 1 Initialize Spark session
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import *
+spark = SparkSession.builder.appName('Spark Playground').getOrCreate()
+
+# -----------------------------------------
+#  2 Load the files (adjust the file paths)
+# -----------------------------------------
+
+# Example: If your files are uploaded as CSVs
+
+
+sales_df = spark.read.format("csv").options(**{"inferSchema": True,
+                                        "header": True}).load("/samples/sales.csv")
+customer_df = spark.read.format("csv").options(**{"inferSchema": True,
+                                        "header": True}).load("/samples/customers.csv")
+product_df = spark.read.format("csv").options(**{"inferSchema": True,
+                                        "header": True}).load("/samples/products.csv")
+
+#3 Register as SQL views
+sales_df.createOrReplaceTempView("sales")
+customer_df.createOrReplaceTempView("customers")
+product_df.createOrReplaceTempView("products")
+
+# 4. Filter customers with purchase_amount > 100
+# -----------------------------------------
+#df_filtered = customer_df.filter(customer_df.purchase_amount > 100)
+
+df_filtered = spark.sql("""
+               SELECT 
+        s.sale_id,
+        s.customer_id,
+        YEAR(sale_date) AS sale_year, 
+        c.first_name,
+        s.product_id,
+        p.product_name,
+        p.category,
+        s.quantity,
+        s.total_amount,
+        (s.quantity * s.total_amount) as Total_Purchase,
+        s.sale_date
+    FROM sales s
+    LEFT JOIN customers c ON s.customer_id = c.customer_id
+    LEFT JOIN products p ON s.product_id = p.product_id
+""")
+
+df_filtered.createOrReplaceTempView("sales_enriched")
+
+# Total purchases by customer
+total_by_customer = spark.sql("""
+    SELECT 
+        customer_id,
+        first_name,
+        SUM(total_amount) AS total_purchase_amount
+    FROM sales_enriched
+    GROUP BY customer_id, first_name
+    order by 1
+""")
+
+# Increasing Trend
+Increasing_Trend = spark.sql("""
+WITH yearly_sales AS (
+    SELECT 
+        p.product_id,
+        YEAR(s.sale_date) AS sale_year,
+        SUM(s.quantity) AS total_quantity
+    FROM sales s
+    JOIN products p ON s.product_id = p.product_id
+    GROUP BY p.product_id, YEAR(s.sale_date)
+),
+growth AS (
+    SELECT 
+        a.product_id,
+        a.sale_year,
+        a.total_quantity,
+        b.total_quantity AS prev_year_quantity
+    FROM yearly_sales a
+    LEFT JOIN yearly_sales b
+    ON a.product_id = b.product_id AND a.sale_year = b.sale_year + 1
+)
+SELECT product_id
+FROM growth
+WHERE total_quantity > prev_year_quantity
+GROUP BY product_id   
+""")
+
+# -----------------------------------------
+#5 Display the DataFrames
+# -----------------------------------------
+
+display(Increasing_Trend)
