@@ -45,8 +45,22 @@ df_filtered = spark.sql("""
     LEFT JOIN products p ON s.product_id = p.product_id
 """)
 
+df_filtered.createOrReplaceTempView("sales_enriched")
+
+# Total purchases by customer
+total_by_customer = spark.sql("""
+    SELECT 
+        customer_id,
+        first_name,
+        SUM(total_amount) AS total_purchase_amount
+    FROM sales_enriched
+    GROUP BY customer_id, first_name
+    order by 1
+""")
+
+
 # -----------------------------------------
 #5 Display the DataFrames
 # -----------------------------------------
 
-display(df_filtered)
+display(total_by_customer)
